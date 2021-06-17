@@ -1,0 +1,95 @@
+import React, {
+    ReactNode,
+    ReactElement,
+    createContext,
+    useContext,
+    useState,
+    useEffect,
+} from 'react'
+
+import fetch from 'isomorphic-unfetch'
+
+export interface UserProfile {
+    email: string | null | undefined
+
+    email_verified: boolean | null | undefined
+
+    name: string | null | undefined
+
+    nickname: string | null | undefined
+
+    picture: string | null | undefined
+
+    sub: string | null | undefined
+
+    updated_at: string | null | undefined
+
+    /** Any custom claim which could be in the profile */
+    [key: string]: unknown
+}
+
+interface UserContext {
+    user: UserProfile | null
+
+    loading: boolean
+}
+
+let userState: UserProfile
+
+const User = createContext<UserContext>({ user: null, loading: false })
+
+export const fetchUser = async (): Promise<UserProfile> => {
+    if (userState !== undefined) {
+        return userState
+    }
+
+    const res = await fetch('/api/me')
+    userState = res.ok ? await res.json() : null
+    return userState
+}
+
+type UserProviderProps = { value: UserContext; children: ReactNode }
+
+export const UserProvider = ({
+    value,
+    children,
+}: UserProviderProps): ReactElement<UserContext> => {
+    const { user } = value
+
+    useEffect(() => {
+        if (!userState && user) {
+            userState = user
+        }
+    }, [])
+
+    return <User.Provider value={value}>{children}</User.Provider>
+}
+
+export const useUser = (): UserContext => useContext(User)
+
+export const useFetchUser = (): UserContext => {
+    const [data, setUser] = useState({
+        user: userState || null,
+        loading: userState === undefined,
+    })
+
+    useEffect(() => {
+        if (userState !== undefined) {
+            return
+        }
+
+        let isMounted = true
+
+        fetchUser().then((user) => {
+            if (isMounted) {
+                setUser({ user, loading: false })
+            }
+        })
+
+        return () => {
+            isMounted = false
+        }
+    }, [userState])
+
+    return data
+}
